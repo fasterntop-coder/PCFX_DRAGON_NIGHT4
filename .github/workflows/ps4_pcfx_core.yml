@@ -1,0 +1,79 @@
+name: PS4 Beetle PC-FX Core
+
+on:
+  push:
+    branches: [ps4-pkg-build]
+    paths:
+      - '.github/workflows/ps4_pcfx_core.yml'
+      - 'ps4_build/**'
+  workflow_dispatch:
+
+jobs:
+  build-core:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld llvm make wget tar git
+
+      - name: Download OpenOrbis v0.5.4
+        run: |
+          wget -q https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz
+          echo '3c7cd5bb593ca74fa1c13fd59f3938dc0fc07985167f7275063019e63abe4526  toolchain-llvm-18.tar.gz' | sha256sum -c -
+          tar xzf toolchain-llvm-18.tar.gz
+          echo "OO_PS4_TOOLCHAIN=$GITHUB_WORKSPACE/OpenOrbis/PS4Toolchain" >> "$GITHUB_ENV"
+
+      - name: Clone Beetle PC-FX
+        run: |
+          git clone --depth 1 https://github.com/libretro/beetle-pcfx-libretro.git beetle-pcfx
+          git -C beetle-pcfx rev-parse HEAD
+
+      - name: Add OpenOrbis static platform
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('beetle-pcfx/Makefile')
+          s=p.read_text()
+          marker='# Lightweight PS3 Homebrew SDK\n'
+          block=r'''# PlayStation 4 (OpenOrbis) - standalone static libretro core
+else ifeq ($(platform), orbis)
+   TARGET := $(TARGET_NAME)_libretro_orbis.a
+   CC = clang
+   CXX = clang++
+   AR = llvm-ar
+   STATIC_LINKING = 1
+   HAVE_CDROM = 0
+   PTHREAD_FLAGS =
+   fpic := -fPIC
+   ORBIS_COMMON := --target=x86_64-pc-freebsd12-elf -isysroot $(OO_PS4_TOOLCHAIN) -isystem $(OO_PS4_TOOLCHAIN)/include -DORBIS -D__ORBIS__ -DUSE_LIBRETRO_VFS
+   CFLAGS += $(ORBIS_COMMON)
+   CXXFLAGS += $(ORBIS_COMMON) -isystem $(OO_PS4_TOOLCHAIN)/include/c++/v1 -stdlib=libc++ -std=gnu++11
+
+'''
+          if marker not in s:
+              raise SystemExit('PS3 marker not found')
+          p.write_text(s.replace(marker, block+marker, 1))
+          PY
+
+      - name: Build static Beetle PC-FX core
+        run: |
+          set -o pipefail
+          make -C beetle-pcfx platform=orbis -j2 2>&1 | tee beetle-build.log
+          file beetle-pcfx/mednafen_pcfx_libretro_orbis.a
+          ls -lh beetle-pcfx/mednafen_pcfx_libretro_orbis.a
+          sha256sum beetle-pcfx/mednafen_pcfx_libretro_orbis.a | tee core.sha256
+
+      - name: Upload core diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dk4-ps4-pcfx-core
+          if-no-files-found: warn
+          path: |
+            beetle-build.log
+            core.sha256
+            beetle-pcfx/mednafen_pcfx_libretro_orbis.a
+          retention-days: 7
