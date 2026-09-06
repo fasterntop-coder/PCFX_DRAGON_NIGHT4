@@ -5,7 +5,7 @@ PC-FX용 **Dragon Knight IV 한글패치** 배포 저장소입니다.
 ## 배포판
 
 - **TEEN VER.zip** — 한글화 적용, 성인 H씬 복원 제외
-- **ADULT VER.zip** — 한글화 적용, H씬 복원 포함
+- **ADULT VER.zip** — 크흠...
 
 ## 사용 방법
 
