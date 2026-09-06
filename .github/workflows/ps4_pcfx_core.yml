@@ -33,30 +33,8 @@ jobs:
 
       - name: Add OpenOrbis static platform
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('beetle-pcfx/Makefile')
-          s=p.read_text()
-          marker='# Lightweight PS3 Homebrew SDK\n'
-          block=r'''# PlayStation 4 (OpenOrbis) - standalone static libretro core
-else ifeq ($(platform), orbis)
-   TARGET := $(TARGET_NAME)_libretro_orbis.a
-   CC = clang
-   CXX = clang++
-   AR = llvm-ar
-   STATIC_LINKING = 1
-   HAVE_CDROM = 0
-   PTHREAD_FLAGS =
-   fpic := -fPIC
-   ORBIS_COMMON := --target=x86_64-pc-freebsd12-elf -isysroot $(OO_PS4_TOOLCHAIN) -isystem $(OO_PS4_TOOLCHAIN)/include -DORBIS -D__ORBIS__ -DUSE_LIBRETRO_VFS
-   CFLAGS += $(ORBIS_COMMON)
-   CXXFLAGS += $(ORBIS_COMMON) -isystem $(OO_PS4_TOOLCHAIN)/include/c++/v1 -stdlib=libc++ -std=gnu++11
-
-'''
-          if marker not in s:
-              raise SystemExit('PS3 marker not found')
-          p.write_text(s.replace(marker, block+marker, 1))
-          PY
+          python3 -c 'from pathlib import Path; p=Path("beetle-pcfx/Makefile"); s=p.read_text(); marker="# Lightweight PS3 Homebrew SDK\n"; block="# PlayStation 4 (OpenOrbis) - standalone static libretro core\nelse ifeq ($$(platform), orbis)\n   TARGET := $$(TARGET_NAME)_libretro_orbis.a\n   CC = clang\n   CXX = clang++\n   AR = llvm-ar\n   STATIC_LINKING = 1\n   HAVE_CDROM = 0\n   PTHREAD_FLAGS =\n   fpic := -fPIC\n   ORBIS_COMMON := --target=x86_64-pc-freebsd12-elf -isysroot $$(OO_PS4_TOOLCHAIN) -isystem $$(OO_PS4_TOOLCHAIN)/include -DORBIS -D__ORBIS__ -DUSE_LIBRETRO_VFS\n   CFLAGS += $$(ORBIS_COMMON)\n   CXXFLAGS += $$(ORBIS_COMMON) -isystem $$(OO_PS4_TOOLCHAIN)/include/c++/v1 -stdlib=libc++ -std=gnu++11\n\n"; assert marker in s; p.write_text(s.replace(marker,block+marker,1))'
+          grep -n -A14 'PlayStation 4' beetle-pcfx/Makefile
 
       - name: Build static Beetle PC-FX core
         run: |
