@@ -33,7 +33,7 @@ jobs:
 
       - name: Add OpenOrbis static platform
         run: |
-          python3 -c 'from pathlib import Path; p=Path("beetle-pcfx/Makefile"); s=p.read_text(); marker="# Lightweight PS3 Homebrew SDK\n"; block="# PlayStation 4 (OpenOrbis) - standalone static libretro core\nelse ifeq ($(platform), orbis)\n   TARGET := $(TARGET_NAME)_libretro_orbis.a\n   CC = clang\n   CXX = clang++\n   AR = llvm-ar\n   STATIC_LINKING = 1\n   HAVE_CDROM = 0\n   PTHREAD_FLAGS =\n   fpic := -fPIC\n   ORBIS_COMMON := --target=x86_64-pc-freebsd12-elf -isysroot $(OO_PS4_TOOLCHAIN) -isystem $(OO_PS4_TOOLCHAIN)/include -DORBIS -D__ORBIS__ -DUSE_LIBRETRO_VFS\n   CFLAGS += $(ORBIS_COMMON)\n   CXXFLAGS += $(ORBIS_COMMON) -isystem $(OO_PS4_TOOLCHAIN)/include/c++/v1 -stdlib=libc++ -std=gnu++11\n\n"; assert marker in s; p.write_text(s.replace(marker,block+marker,1))'
+          python3 -c 'from pathlib import Path; p=Path("beetle-pcfx/Makefile"); s=p.read_text(); marker="# Lightweight PS3 Homebrew SDK\n"; block="# PlayStation 4 (OpenOrbis) - standalone static libretro core\nelse ifeq ($(platform), orbis)\n   TARGET := $(TARGET_NAME)_libretro_orbis.a\n   CC = clang\n   CXX = clang++\n   AR = llvm-ar\n   STATIC_LINKING = 1\n   HAVE_CDROM = 0\n   PTHREAD_FLAGS =\n   fpic := -fPIC\n   ORBIS_COMMON := --target=x86_64-pc-freebsd12-elf -isysroot $(OO_PS4_TOOLCHAIN) -isystem $(OO_PS4_TOOLCHAIN)/include -DORBIS -D__ORBIS__\n   CFLAGS += $(ORBIS_COMMON)\n   CXXFLAGS += $(ORBIS_COMMON) -isystem $(OO_PS4_TOOLCHAIN)/include/c++/v1 -stdlib=libc++ -std=gnu++11\n\n"; assert marker in s; p.write_text(s.replace(marker,block+marker,1))'
           grep -n -A14 'PlayStation 4' beetle-pcfx/Makefile
 
       - name: Build static Beetle PC-FX core
@@ -55,3 +55,11 @@ jobs:
             core.sha256
             beetle-pcfx/mednafen_pcfx_libretro_orbis.a
           retention-days: 7
+
+      - name: Upload OpenOrbis v0.5.4 toolchain archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: openorbis-v054-toolchain
+          compression-level: 0
+          path: toolchain-llvm-18.tar.gz
+          retention-days: 1
