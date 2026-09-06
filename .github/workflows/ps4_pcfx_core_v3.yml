@@ -1,0 +1,82 @@
+name: PS4 Beetle PC-FX V3 Core
+
+on:
+  push:
+    branches: [ps4-pkg-v3]
+    paths:
+      - '.github/workflows/ps4_pcfx_core_v3.yml'
+  workflow_dispatch:
+
+jobs:
+  build-core:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld llvm make wget tar git
+
+      - name: Download OpenOrbis v0.5.4
+        run: |
+          wget -q https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz
+          echo '3c7cd5bb593ca74fa1c13fd59f3938dc0fc07985167f7275063019e63abe4526  toolchain-llvm-18.tar.gz' | sha256sum -c -
+          tar xzf toolchain-llvm-18.tar.gz
+          echo "OO_PS4_TOOLCHAIN=$GITHUB_WORKSPACE/OpenOrbis/PS4Toolchain" >> "$GITHUB_ENV"
+
+      - name: Clone Beetle PC-FX
+        run: |
+          git clone --depth 1 https://github.com/libretro/beetle-pcfx-libretro.git beetle-pcfx
+          git -C beetle-pcfx rev-parse HEAD | tee core-source-revision.txt
+
+      - name: Patch core for PS4 standalone V3
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('beetle-pcfx/Makefile')
+          s = p.read_text()
+          marker = '# Lightweight PS3 Homebrew SDK\n'
+          block = '''# PlayStation 4 (OpenOrbis) - DK4 standalone V3\nelse ifeq ($(platform), orbis)\n   TARGET := $(TARGET_NAME)_libretro_orbis.a\n   CC = clang\n   CXX = clang++\n   AR = llvm-ar\n   STATIC_LINKING = 1\n   HAVE_CDROM = 0\n   HAVE_CHD = 0\n   NEED_BPP = 16\n   PTHREAD_FLAGS =\n   fpic := -fPIC\n   ORBIS_COMMON := --target=x86_64-pc-freebsd12-elf -isysroot $(OO_PS4_TOOLCHAIN) -isystem $(OO_PS4_TOOLCHAIN)/include -DORBIS -D__ORBIS__\n   CFLAGS += $(ORBIS_COMMON)\n   CXXFLAGS += $(ORBIS_COMMON) -isystem $(OO_PS4_TOOLCHAIN)/include/c++/v1 -stdlib=libc++ -std=gnu++11\n\n'''
+          if marker not in s:
+              raise SystemExit('PS3 platform marker not found')
+          s = s.replace(marker, block + marker, 1)
+          inc = 'include Makefile.common\n'
+          support = '''\nifeq ($(platform), orbis)\nSOURCES_C += $(LIBRETRO_COMM_DIR)/streams/file_stream.c $(LIBRETRO_COMM_DIR)/streams/file_stream_transforms.c $(LIBRETRO_COMM_DIR)/file/file_path.c $(LIBRETRO_COMM_DIR)/file/retro_dirent.c $(LIBRETRO_COMM_DIR)/lists/string_list.c $(LIBRETRO_COMM_DIR)/lists/dir_list.c $(LIBRETRO_COMM_DIR)/compat/compat_strl.c $(LIBRETRO_COMM_DIR)/compat/compat_snprintf.c $(LIBRETRO_COMM_DIR)/compat/compat_posix_string.c $(LIBRETRO_COMM_DIR)/compat/compat_strcasestr.c $(LIBRETRO_COMM_DIR)/compat/fopen_utf8.c $(LIBRETRO_COMM_DIR)/encodings/encoding_utf.c $(LIBRETRO_COMM_DIR)/encodings/encoding_crc32.c $(LIBRETRO_COMM_DIR)/vfs/vfs_implementation.c $(LIBRETRO_COMM_DIR)/memmap/memalign.c $(LIBRETRO_COMM_DIR)/string/stdstring.c $(LIBRETRO_COMM_DIR)/time/rtime.c\nendif\n'''
+          if inc not in s:
+              raise SystemExit('Makefile.common include not found')
+          p.write_text(s.replace(inc, inc + support, 1))
+
+          lr = Path('beetle-pcfx/libretro.cpp')
+          t = lr.read_text()
+          old1 = 'SoundBox_SetSoundRate(44100.0);'
+          old2 = 'info->timing.sample_rate    = 44100;'
+          if old1 not in t or old2 not in t:
+              raise SystemExit('sample-rate markers not found')
+          t = t.replace(old1, 'SoundBox_SetSoundRate(48000.0);', 1)
+          t = t.replace(old2, 'info->timing.sample_rate    = 48000;', 1)
+          lr.write_text(t)
+          PY
+          grep -n -A16 'DK4 standalone V3' beetle-pcfx/Makefile
+          grep -n 'SoundBox_SetSoundRate\|timing.sample_rate' beetle-pcfx/libretro.cpp
+
+      - name: Build static Beetle PC-FX core V3
+        run: |
+          set -o pipefail
+          make -C beetle-pcfx platform=orbis -j2 2>&1 | tee beetle-v3-build.log
+          file beetle-pcfx/mednafen_pcfx_libretro_orbis.a
+          ls -lh beetle-pcfx/mednafen_pcfx_libretro_orbis.a
+          sha256sum beetle-pcfx/mednafen_pcfx_libretro_orbis.a | tee core-v3.sha256
+
+      - name: Upload V3 core
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dk4-ps4-pcfx-core-v3
+          if-no-files-found: warn
+          path: |
+            beetle-v3-build.log
+            core-v3.sha256
+            core-source-revision.txt
+            beetle-pcfx/mednafen_pcfx_libretro_orbis.a
+          retention-days: 7
