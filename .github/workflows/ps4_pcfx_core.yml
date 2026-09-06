@@ -26,6 +26,11 @@ jobs:
           tar xzf toolchain-llvm-18.tar.gz
           echo "OO_PS4_TOOLCHAIN=$GITHUB_WORKSPACE/OpenOrbis/PS4Toolchain" >> "$GITHUB_ENV"
 
+      - name: Fetch libssl 1.1 compatibility runtime
+        run: |
+          wget -q https://security.debian.org/debian-security/pool/updates/main/o/openssl/libssl1.1_1.1.1w-0+deb11u8_amd64.deb
+          echo 'dcc68a543de6cb955a57077b66dcdb15f61d1e31e072f2c6cc4082c37da1b00d  libssl1.1_1.1.1w-0+deb11u8_amd64.deb' | sha256sum -c -
+
       - name: Clone Beetle PC-FX
         run: |
           git clone --depth 1 https://github.com/libretro/beetle-pcfx-libretro.git beetle-pcfx
@@ -63,4 +68,12 @@ jobs:
           name: openorbis-v054-toolchain
           compression-level: 0
           path: toolchain-llvm-18.tar.gz
+          retention-days: 1
+
+      - name: Upload libssl 1.1 runtime package
+        uses: actions/upload-artifact@v4
+        with:
+          name: libssl1.1-runtime
+          compression-level: 0
+          path: libssl1.1_1.1.1w-0+deb11u8_amd64.deb
           retention-days: 1
